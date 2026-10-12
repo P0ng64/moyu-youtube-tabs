@@ -163,8 +163,11 @@ function $i(l,{params:e}){let _ytTabs=globalThis.__ytBottomTabFilter(e),_ytHit=!
 
 - **加了 conf 订阅但没生效**：确认 `[rewrite_remote]` 那行是 `enabled=true`；QX 开着 MITM 且证书已信任；
   在 QX 的「重写」页看一眼规则条数（这份 conf 应该贡献 6 条 + 1 行 hostname）。规则数不对就是订阅没拉下来。
-- **改了配置但手机上没变化**：客户端要「外部资源 → 全部更新」，并且彻底杀掉 YouTube 再打开；若走了 GitHub raw，
-  还有 CDN 缓存，等一两分钟或改一次文件名（版本号）再试。
+- **改了配置但手机上没变化**：客户端要「外部资源 → 全部更新」，并且彻底杀掉 YouTube 再打开。
+  走 GitHub raw 时有 **300 秒 CDN 缓存**（`cache-control: max-age=300`，响应头里能看到 `age`），
+  刚 push 完马上更新可能还是旧文件 —— 等 5 分钟再来一次，或点开 `dist/qx-rewrite.txt` 确认地址没写错。
+- **想确认 GitHub 上到底是哪一版**：看 `dist/manifest.json` 里的 `dist.sha256` 和 `bottom_tabs`，
+  和自己的本地文件对一下就知道 CDN 有没有追上。
 - **Simulator/真机上看不到效果**：底部标签是一次性拉取的，重启 App 才会重新请求 `guide`。
 - **白名单模式下标签栏只剩一两个**：这是白名单的预期行为，YouTube 不会自动补回被移除的项。
 - **想回到最初的默认行为**：`git checkout config dist`，或把 `disableLegacy` 设回 `false` 且清空两个清单。
