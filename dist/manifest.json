@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-12T06:39:56.194Z",
+  "generated_at": "2026-10-12T06:42:27.196Z",
   "generator": "build/build.js",
   "upstream": {
     "url": "https://raw.githubusercontent.com/Maasea/sgmodule/master/Script/Youtube/youtube.response.js",
@@ -10,7 +10,7 @@
   },
   "config_sha256": "8bfe432b9eaa5afaaf3a3816cf805d08cb58004974a27bb31de220579e6294ed",
   "dist": {
-    "sha256": "93c91a9744fdfa88e7fe221cc6afc9025c4163f1e9acd56c34120f5030dc6547",
+    "sha256": "e5422212b9456003fb7cce4b8f5fb07bad5edf307d8dc96f3c8ca9bd9abe49da",
     "bytes": 136346,
     "path": "dist/youtube.response.js"
   },

@@ -159,7 +159,7 @@ if [ -n "$(git status --porcelain)" ]; then
     log "提示: 未配置 git user.email，本次提交使用临时身份"
   fi
   git add -A
-  if git "${GIT_ID[@]}" commit -q -m "chore(upstream): 同步上游脚本 ${NEW_BUILD#// }" >> "$LOG" 2>&1; then
+  if git ${GIT_ID[@]+"${GIT_ID[@]}"} commit -q -m "chore(upstream): 同步上游脚本 ${NEW_BUILD#// }" >> "$LOG" 2>&1; then
     log "已提交: $(git log -1 --pretty=%s)"
   else
     log "提交失败（见日志），文件已更新但没进版本历史"

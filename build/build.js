@@ -29,7 +29,7 @@ const P = {
   qxline: path.join(ROOT, 'dist', 'qx-rewrite.txt'),
 };
 
-const MARKER = '["SPunlimited"]';                                          // 上游底部标签过滤函数的特征串
+const MARKER = 'SPunlimited';                                              // 上游底部标签过滤函数的特征串（它的写死隐藏列表里必有这个 ID）
 const NEEDED = ['rendererItems', 'iconRender', 'labelRender', 'browseId'];  // 该函数必须含有的特征
 
 const argv = process.argv.slice(2);
@@ -108,33 +108,40 @@ function findEnclosingFunction(text, idx) {
 }
 
 function locateTabFunction(text) {
-  const markerIdx = text.indexOf(MARKER);
-  if (markerIdx < 0) {
-    die(`上游脚本里找不到特征串 ${MARKER} —— 上游可能改了底部标签逻辑。\n` +
-        `  请人工检查 upstream/youtube.response.js 里 rendererItems 的过滤逻辑，再更新 build/build.js。`);
+  /* 上游可能: 改函数名、往写死的列表里加/删 ID、调整顺序 —— 这些都不该让我们失手。
+     所以遍历所有出现特征串的地方，取「外层函数里确实在过滤 rendererItems」的那一个。 */
+  const found = [];
+  let at = -1;
+  while ((at = text.indexOf(MARKER, at + 1)) >= 0) {
+    const fn = findEnclosingFunction(text, at);
+    if (!fn) continue;
+    const end = matchBraces(text, fn.braceIdx);
+    if (end < 0) continue;
+    const src = text.slice(fn.start, end + 1);
+    if (!NEEDED.every((n) => src.includes(n))) continue;
+    const walkerMatch = /([\w$]+)\(\s*[\w$]+\s*,\s*"rendererItems"/.exec(src);
+    if (!walkerMatch) continue;
+    if (src.length > 6000) continue;
+    const first = fn.params.split(',')[0].trim();
+    if (!/^[\w$]+$/.test(first)) continue;
+    if (!/\{\s*params\s*:\s*[\w$]+\s*\}/.test(fn.params)) continue;
+    found.push({ ...fn, end, src, walker: walkerMatch[1], data: first });
   }
-  if (text.indexOf(MARKER, markerIdx + 1) >= 0) die(`特征串 ${MARKER} 出现多次，无法确定目标函数，请人工检查。`);
 
-  const fn = findEnclosingFunction(text, markerIdx);
-  if (!fn) die('找到了特征串，但没能定位到它所属的函数声明。');
-
-  const end = matchBraces(text, fn.braceIdx);
-  if (end < 0) die('函数大括号配对失败（上游语法可能已变）。');
-
-  const src = text.slice(fn.start, end + 1);
-  if (src.length > 6000) die(`匹配到的函数异常地大（${src.length} 字符），出于安全拒绝打补丁。`);
-  for (const need of NEEDED) {
-    if (!src.includes(need)) {
-      die(`匹配到的函数（${fn.name}）里没有 "${need}"，它很可能已不是底部标签过滤逻辑。\n  匹配内容: ${src.slice(0, 240)}...`);
-    }
+  if (found.length === 0) {
+    const seen = text.indexOf(MARKER) >= 0;
+    die(`没能在上游脚本里找到「过滤底部标签的那个函数」。\n` +
+        `  判据: 函数里同时出现 ${MARKER}、${NEEDED.join(' / ')}，并且在遍历 "rendererItems"。\n` +
+        (seen ? '  特征串还在，但所属函数的形态变了 —— 上游可能重构了这部分逻辑。\n'
+              : `  连特征串 ${MARKER} 都找不到 —— 上游可能整段重写了。\n`) +
+        '  请人工检查 upstream/youtube.response.js，再更新 build/build.js 的补丁。');
   }
-  const walkerMatch = /([\w$]+)\(\s*[\w$]+\s*,\s*"rendererItems"/.exec(src);
-  if (!walkerMatch) die(`没能在 ${fn.name} 里找到遍历 rendererItems 的函数名。`);
-
-  const first = fn.params.split(',')[0].trim();
-  if (!/^[\w$]+$/.test(first)) die(`第一个形参不是简单变量名（"${first}"），无法安全替换。`);
-
-  return { ...fn, end, src, walker: walkerMatch[1], data: first };
+  if (found.length > 1) {
+    const list = found.map((f) => `${f.name}(${f.params}) @${f.start} [${f.src.length}字符]`).join('\n    ');
+    die(`有 ${found.length} 个函数都符合判据，无法确定该改哪一个（怕改错，故拒绝）:\n    ${list}\n` +
+        '  请在 build/build.js 里加一条更具体的判据。');
+  }
+  return found[0];
 }
 
 /* ---------- 2. 生成注入内容 ---------- */
@@ -259,8 +266,14 @@ function main() {
   /* --- 自检: 定制层必须真的被接上 --- */
   if (!out.includes('globalThis.__ytBottomTabFilter = function')) die('注入失败：产物里没有定制过滤器。');
   if (!repl.includes('__ytBottomTabFilter')) die('注入失败：底部标签函数没有调用定制过滤器。');
-  if (out.indexOf('["SPunlimited"]') >= 0) die('注入失败：上游写死的 ["SPunlimited"] 仍留在产物里。');
-  if (!out.includes('"rendererItems"')) die('注入失败：rendererItems 遍历逻辑丢失。');
+  if (patched.includes(fn.src)) die('注入失败：上游原始函数还留在产物里。');
+  if (patched.slice(fn.start, fn.start + repl.length) !== repl) die('注入失败：替换的位置不对。');
+  const markerLeft = patched.split(MARKER).length - 1;
+  if (markerLeft > 0) {
+    die(`产物里还残留 ${markerLeft} 处上游特征串 ${MARKER} —— 说明上游别的地方也有这段写死的列表，\n` +
+        '  本次替换可能不完整。请人工检查后再放开。');
+  }
+  if (!patched.includes('"rendererItems"')) die('注入失败：rendererItems 遍历逻辑丢失。');
 
   fs.mkdirSync(path.dirname(P.dist), { recursive: true });
   fs.writeFileSync(P.dist, out);
