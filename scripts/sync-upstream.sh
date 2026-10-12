@@ -116,7 +116,7 @@ for k in "${!SRC_LOCAL[@]}"; do
     if [ -z "$MSG_PARTS" ]; then MSG_PARTS="${SRC_LABEL[$k]}"; else MSG_PARTS="$MSG_PARTS 与 ${SRC_LABEL[$k]}"; fi
   fi
 done
-log "开始重新生成（更新了: $MSG_PARTS）"
+log "开始重新生成（更新了: ${MSG_PARTS}）"
 
 fail() {   # $1 = 原因
   log "✖ $1 —— 回滚到上一个能用的状态"
@@ -150,18 +150,20 @@ fail() {   # $1 = 原因
 3. 改完跑:
    \`\`\`
    scripts/sync-upstream.sh --force    # 重新应用并生成
+   node tests/test-scripts.js          # shell 脚本自检（含 bash 3.2 陷阱扫描）
    node tests/test-bottom-tabs.js      # 底部标签定制: 端到端测试
    node tests/test-conf.js             # QX 订阅 conf 的测试
    \`\`\`
 4. 一切正常后删掉本文件再提交。
 EOF
-  notify "YouTube 去广告订阅同步失败" "$1；已回滚，见 SYNC_NEEDS_REVIEW.md"
+  notify "YouTube 去广告订阅同步失败" "${1}；已回滚，见 SYNC_NEEDS_REVIEW.md"
   exit 1
 }
 
 node build/build.js >> "$LOG" 2>&1 || { tail -6 "$LOG" | sed 's/^/    /'; fail "生成失败（补丁或 conf 打不上）"; }
 
 log "跑测试 ..."
+node tests/test-scripts.js      >> "$LOG" 2>&1 || { grep -E '^[0-9]+ 通过|^✖' "$LOG" | tail -3 | sed 's/^/    /'; fail "shell 脚本自检没通过"; }
 node tests/test-bottom-tabs.js >> "$LOG" 2>&1 || { grep -E '^[0-9]+ 通过' "$LOG" | tail -1 | sed 's/^/    /'; fail "底部标签定制的测试没通过"; }
 node tests/test-conf.js        >> "$LOG" 2>&1 || { grep -E '^[0-9]+ 通过' "$LOG" | tail -1 | sed 's/^/    /'; fail "QX 订阅 conf 的测试没通过"; }
 

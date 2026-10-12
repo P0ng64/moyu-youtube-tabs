@@ -156,6 +156,8 @@ function $i(l,{params:e}){let _ytTabs=globalThis.__ytBottomTabFilter(e),_ytHit=!
   检查哪些标签被移除了（10 个用例，覆盖黑白名单、未知标签、上游开关、labelRender 形式、YT Music）。
 - `tests/test-conf.js` 逐行比对生成的 conf 和墨鱼那份：除 `script-` 那一行的地址外必须逐字一致，
   顺带校验每条规则的正则能编译、动作是合法写法、没有残留上游脚本地址（14 项检查）。
+- `tests/test-scripts.js` 给 `scripts/*.sh` 体检：用系统自带 `/bin/bash`（3.2）做语法检查、扫 bash 4+ 语法、
+  以及扫「`$VAR` 后面紧跟中文字符」这类 3.2 特有陷阱（3 个脚本 × 6 项）。
 
 ## 常见问题
 
