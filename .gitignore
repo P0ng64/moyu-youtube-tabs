@@ -1,0 +1,6 @@
+logs/
+SYNC_NEEDS_REVIEW.md
+.DS_Store
+.build-check.js
+*.bak
+tmp/

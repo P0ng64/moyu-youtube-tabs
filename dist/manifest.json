@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-10-12T06:39:56.194Z",
+  "generator": "build/build.js",
+  "upstream": {
+    "url": "https://raw.githubusercontent.com/Maasea/sgmodule/master/Script/Youtube/youtube.response.js",
+    "referenced_by": "https://raw.githubusercontent.com/ddgksf2013/Rewrite/master/AdBlock/YoutubeAds.conf",
+    "build_line": "// Build: 2026/7/19 16:16:39",
+    "sha256": "f98483d5f5017514f82502253c0db5ce2d4ffb7839887aa2cadc22666f5a7f12",
+    "bytes": 132973
+  },
+  "config_sha256": "8bfe432b9eaa5afaaf3a3816cf805d08cb58004974a27bb31de220579e6294ed",
+  "dist": {
+    "sha256": "93c91a9744fdfa88e7fe221cc6afc9025c4163f1e9acd56c34120f5030dc6547",
+    "bytes": 136346,
+    "path": "dist/youtube.response.js"
+  },
+  "patch": {
+    "function": "$i",
+    "strategy": "semantic-replace",
+    "checks": [
+      "node --check",
+      "filter-wired"
+    ]
+  },
+  "bottom_tabs": {
+    "mode": "hide",
+    "hide_list": [
+      "SPunlimited",
+      "FEuploads",
+      "FEmusic_immersive"
+    ],
+    "keep_list": [],
+    "keep_unknown": true,
+    "legacy_switches_active": false,
+    "debug": false
+  }
+}

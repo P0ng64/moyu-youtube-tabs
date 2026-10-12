@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "mode": "hide",
+  "hide": ["SPunlimited", "FEuploads", "FEmusic_immersive"],
+  "keep": [],
+  "keepUnknown": true,
+  "disableLegacy": true,
+  "debug": false,
+  "catalogExtras": {},
+  "updatedAt": "seed",
+  "note": "改这个文件请用 scripts/customize.sh（它会重新生成 dist/）；直接手改也行，但改完必须跑一次 scripts/customize.sh --rebuild 或 node build/build.js"
+}

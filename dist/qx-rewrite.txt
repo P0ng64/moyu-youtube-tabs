@@ -1,0 +1,8 @@
+# 生成时间: 2026-10-12T06:39:56.194Z
+# 用法: 把墨鱼 YoutubeAds.conf 里那一行 script-response-body 的脚本地址换成下面这个 URL
+#       （QuantumultX 是 [rewrite_local] 里那一行；Surge / Loon 是模块里的 script-path）
+# 未配置 git remote 时，<RAW-URL> 是占位符，推到 GitHub 后再跑一次 node build/build.js 会自动填好。
+
+^https?:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/(browse|next|player|search|reel\/reel_watch_sequence|guide|account\/get_setting|get_watch) url script-response-body <RAW-URL>
+
+# 改完地址后: 客户端「外部资源 → 全部更新」，然后彻底重启 YouTube App。

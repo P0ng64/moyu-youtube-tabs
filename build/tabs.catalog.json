@@ -1,0 +1,22 @@
+{
+  "_comment": "已知的底部导航（Bottom Tab / guide）browseId 目录。verified=true 表示该 ID 在上游脚本自带的默认逻辑里出现过（FEuploads/FEmusic_immersive/FEshorts/SPunlimited 来自上游的 blockUpload/blockImmersive/blockShorts 开关），其余为 InnerTube 常见取值，未在真机逐一验证；若你的客户端里出现了目录里没有的 ID，打开定制脚本里的“调试日志”再跑定制即可看到实际 ID。",
+  "items": {
+    "FEwhat_to_watch":   { "name": "首页",             "app": "youtube", "verified": false },
+    "FEshorts":          { "name": "Shorts",           "app": "youtube", "verified": true  },
+    "FEuploads":         { "name": "创建 / 上传 (+)",  "app": "youtube", "verified": true  },
+    "FEsubscriptions":   { "name": "订阅",             "app": "youtube", "verified": false },
+    "FElibrary":         { "name": "我的 / 媒体库",    "app": "youtube", "verified": false },
+    "FEhistory":         { "name": "观看记录",         "app": "youtube", "verified": false },
+    "FEplaylist_aggregation": { "name": "播放列表",    "app": "youtube", "verified": false },
+    "FEmy_videos":       { "name": "我的视频",         "app": "youtube", "verified": false },
+    "FEtrending":        { "name": "热门 / 时下流行",  "app": "youtube", "verified": false },
+    "FEexplore":         { "name": "探索",             "app": "youtube", "verified": false },
+    "FEdownloads":       { "name": "下载内容",         "app": "youtube", "verified": false },
+    "FEmusic_home":      { "name": "YT Music 首页",    "app": "music",   "verified": false },
+    "FEmusic_explore":   { "name": "YT Music 探索",    "app": "music",   "verified": false },
+    "FEmusic_library_landing": { "name": "YT Music 媒体库", "app": "music", "verified": false },
+    "FEmusic_immersive": { "name": "YT Music 样本 / 选段", "app": "music", "verified": true },
+    "FEmusic_multi_home_and_library": { "name": "YT Music 首页+库(合并版)", "app": "music", "verified": false },
+    "SPunlimited":       { "name": "自有上传频道 (YT Music)", "app": "music", "verified": true }
+  }
+}

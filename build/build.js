@@ -1,0 +1,315 @@
+#!/usr/bin/env node
+/**
+ * build/build.js — 把「底部标签栏定制层」注入上游 YouTube 去广告脚本。
+ *
+ * 输入:  upstream/youtube.response.js   (上游原始脚本, 只读, 永不修改)
+ *        config/bottom-tabs.json       (用户定制配置, 由 scripts/customize.js 生成)
+ *        build/tabs.catalog.json       (已知底部标签 browseId 目录)
+ * 输出:  dist/youtube.response.js       (可直接被 QuantumultX/Surge/Loon 引用)
+ *        dist/manifest.json            (构建元信息)
+ *        dist/qx-rewrite.txt           (可直接粘贴的 QuantumultX 重写行)
+ *
+ * 上游结构一旦变化导致找不到「底部标签过滤函数」，本脚本会报错退出（绝不产出半成品）。
+ */
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const { execFileSync } = require('child_process');
+
+const ROOT = path.resolve(__dirname, '..');
+const P = {
+  upstream: path.join(ROOT, 'upstream', 'youtube.response.js'),
+  source: path.join(ROOT, 'upstream', 'source.json'),
+  config: path.join(ROOT, 'config', 'bottom-tabs.json'),
+  catalog: path.join(ROOT, 'build', 'tabs.catalog.json'),
+  dist: path.join(ROOT, 'dist', 'youtube.response.js'),
+  manifest: path.join(ROOT, 'dist', 'manifest.json'),
+  qxline: path.join(ROOT, 'dist', 'qx-rewrite.txt'),
+};
+
+const MARKER = '["SPunlimited"]';                                          // 上游底部标签过滤函数的特征串
+const NEEDED = ['rendererItems', 'iconRender', 'labelRender', 'browseId'];  // 该函数必须含有的特征
+
+const argv = process.argv.slice(2);
+const QUIET = argv.includes('--quiet');
+const log = (...a) => { if (!QUIET) console.log(...a); };
+const die = (msg) => { console.error('✖ ' + msg); process.exit(1); };
+
+const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
+const read = (p) => fs.readFileSync(p, 'utf8');
+const readJSON = (p) => JSON.parse(read(p));
+const readJSONIfExists = (p, fb) => { try { return readJSON(p); } catch (e) { return fb; } };
+
+/* ---------- 1. 在上游脚本里定位「底部标签过滤函数」 ---------- *
+ * 不依赖压缩后的函数名（esbuild 会改名），只依赖语义特征：
+ *   - 函数体里出现 ["SPunlimited"]（上游写死的隐藏列表）
+ *   - 同一个函数里出现 rendererItems / iconRender / labelRender / browseId
+ * 找到后用大括号配对（跳过字符串/注释）取出整个函数的文本区间。
+ */
+
+function skipStringOrComment(text, i) {
+  const c = text[i];
+  if (c === '"' || c === "'" || c === '`') {
+    const quote = c;
+    i++;
+    while (i < text.length) {
+      if (text[i] === '\\') { i += 2; continue; }
+      if (text[i] === quote) { i++; break; }
+      i++;
+    }
+    return i;
+  }
+  if (c === '/' && text[i + 1] === '/') { while (i < text.length && text[i] !== '\n') i++; return i; }
+  if (c === '/' && text[i + 1] === '*') {
+    i += 2;
+    while (i < text.length && !(text[i] === '*' && text[i + 1] === '/')) i++;
+    return i + 2;
+  }
+  return -1;
+}
+
+function matchBraces(text, braceIdx) {          // braceIdx 指向 '{'，返回配对的 '}' 的索引
+  let depth = 0;
+  for (let i = braceIdx; i < text.length; i++) {
+    const skipped = skipStringOrComment(text, i);
+    if (skipped >= 0) { i = skipped - 1; continue; }
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') { depth--; if (depth === 0) return i; }
+  }
+  return -1;
+}
+
+function findEnclosingFunction(text, idx) {
+  const re = /(?:^|[^\w$.])function\s+([\w$]+)\s*\(/g;
+  const head = text.slice(0, idx);
+  let best = null, m;
+  while ((m = re.exec(head)) !== null) best = m;
+  if (!best) return null;
+
+  let i = best.index + best[0].length - 1;      // 指向 '('
+  let depth = 0;
+  for (; i < text.length; i++) {
+    const skipped = skipStringOrComment(text, i);
+    if (skipped >= 0) { i = skipped - 1; continue; }
+    if (text[i] === '(') depth++;
+    else if (text[i] === ')') { depth--; if (depth === 0) { i++; break; } }
+  }
+  while (i < text.length && /\s/.test(text[i])) i++;
+  if (text[i] !== '{') return null;
+
+  return {
+    name: best[1],
+    params: text.slice(best.index + best[0].length, i - 1),
+    start: best.index + (best[0].startsWith('function') ? 0 : 1),
+    braceIdx: i,
+  };
+}
+
+function locateTabFunction(text) {
+  const markerIdx = text.indexOf(MARKER);
+  if (markerIdx < 0) {
+    die(`上游脚本里找不到特征串 ${MARKER} —— 上游可能改了底部标签逻辑。\n` +
+        `  请人工检查 upstream/youtube.response.js 里 rendererItems 的过滤逻辑，再更新 build/build.js。`);
+  }
+  if (text.indexOf(MARKER, markerIdx + 1) >= 0) die(`特征串 ${MARKER} 出现多次，无法确定目标函数，请人工检查。`);
+
+  const fn = findEnclosingFunction(text, markerIdx);
+  if (!fn) die('找到了特征串，但没能定位到它所属的函数声明。');
+
+  const end = matchBraces(text, fn.braceIdx);
+  if (end < 0) die('函数大括号配对失败（上游语法可能已变）。');
+
+  const src = text.slice(fn.start, end + 1);
+  if (src.length > 6000) die(`匹配到的函数异常地大（${src.length} 字符），出于安全拒绝打补丁。`);
+  for (const need of NEEDED) {
+    if (!src.includes(need)) {
+      die(`匹配到的函数（${fn.name}）里没有 "${need}"，它很可能已不是底部标签过滤逻辑。\n  匹配内容: ${src.slice(0, 240)}...`);
+    }
+  }
+  const walkerMatch = /([\w$]+)\(\s*[\w$]+\s*,\s*"rendererItems"/.exec(src);
+  if (!walkerMatch) die(`没能在 ${fn.name} 里找到遍历 rendererItems 的函数名。`);
+
+  const first = fn.params.split(',')[0].trim();
+  if (!/^[\w$]+$/.test(first)) die(`第一个形参不是简单变量名（"${first}"），无法安全替换。`);
+
+  return { ...fn, end, src, walker: walkerMatch[1], data: first };
+}
+
+/* ---------- 2. 生成注入内容 ---------- */
+
+function effectiveHide(cfg) {
+  const hide = (cfg.hide || []).slice();
+  if (!cfg.disableLegacy) hide.push('SPunlimited', 'FEuploads', 'FEmusic_immersive');  // 上游 ai() 默认值
+  return [...new Set(hide)];
+}
+
+function header(cfg, catalog, ts, upstreamBuildLine) {
+  const tabs = {
+    hide: cfg.hide || [],
+    keep: cfg.keep || [],
+    keepUnknown: cfg.keepUnknown !== false,
+    disableLegacy: cfg.disableLegacy !== false,
+    debug: !!cfg.debug,
+  };
+  const cat = {};
+  for (const [id, info] of Object.entries(catalog.items || {})) cat[id] = { name: info.name, app: info.app };
+  for (const [id, name] of Object.entries(cfg.catalogExtras || {})) cat[id] = { name, app: 'custom' };
+
+  return `/* ============================================================================
+ * 定制层 · YouTube 底部标签栏 (Bottom Tab)                       【勿手改此段】
+ * 配置源 : config/bottom-tabs.json
+ * 生成器 : build/build.js    生成时间: ${ts}
+ * 上游   : ${upstreamBuildLine}
+ * 用 scripts/customize.sh 交互式改配置，改完会重新生成整个文件。
+ * ========================================================================== */
+globalThis.__YT_BOTTOM_TABS__ = ${JSON.stringify(tabs)};
+globalThis.__YT_TAB_CATALOG__ = ${JSON.stringify(cat)};
+(function () {
+    var C = globalThis.__YT_BOTTOM_TABS__ || {};
+    var CAT = globalThis.__YT_TAB_CATALOG__ || {};
+    var _logged = Object.create(null);
+    function _nm(id) { var e = CAT[id]; return e ? e.name : ''; }
+    globalThis.__ytBottomTabFilter = function (params) {
+        var hide = (C.hide || []).slice(0);
+        var keep = C.keep || [];
+        if (!C.disableLegacy) {                        // 上游旧开关仍然生效
+            hide.push('SPunlimited');
+            if (params && params.blockUpload) hide.push('FEuploads');
+            if (params && params.blockImmersive) hide.push('FEmusic_immersive');
+            if (params && params.blockShorts) hide.push('FEshorts');
+        }
+        var keepMode = keep.length > 0;
+        return function (id) {
+            if (!id) return false;
+            var known = Object.prototype.hasOwnProperty.call(CAT, id);
+            if (C.debug && !_logged[id]) {
+                _logged[id] = 1;
+                console.log('[YT-Tabs] 底部标签: ' + id + (known ? ' (' + _nm(id) + ')' : ' (未知, 未在目录中)'));
+            }
+            if (keepMode) {                            // 白名单模式
+                if (keep.indexOf(id) >= 0) return false;
+                if (!known) return !C.keepUnknown;     // 目录外的未知标签：按 keepUnknown 决定
+                return true;                           // 目录内且不在白名单 -> 移除
+            }
+            var drop = hide.indexOf(id) >= 0;          // 黑名单模式
+            if (drop && C.debug) console.log('[YT-Tabs] 移除底部标签: ' + id + (known ? ' (' + _nm(id) + ')' : ''));
+            return drop;
+        };
+    };
+})();
+
+`;
+}
+
+function replacement(fn) {
+  const pvMatch = /\{\s*params\s*:\s*([\w$]+)\s*\}/.exec(fn.params);
+  if (!pvMatch) die(`无法从参数列表 "${fn.params}" 中取出 params 变量名。`);
+  const pv = pvMatch[1], L = fn.data, W = fn.walker;
+  const hit = '_ytHit', tabs = '_ytTabs', nd = '_ytNode', ix = '_ytI', id = '_ytId';
+  return `function ${fn.name}(${fn.params}){` +
+    `let ${tabs}=globalThis.__ytBottomTabFilter(${pv}),${hit}=!1;` +
+    `return ${W}(${L},"rendererItems",${nd}=>{` +
+    `for(let ${ix}=${nd}.rendererItems.length-1;${ix}>=0;${ix}--){` +
+    `let ${id}=${nd}.rendererItems[${ix}]?.iconRender?.browseId??${nd}.rendererItems[${ix}]?.labelRender?.browseId;` +
+    `${id}&&${tabs}(${id})&&(${nd}.rendererItems.splice(${ix},1),${hit}=!0)` +
+    `}}),{bodyChanged:${hit},stateChanged:!1}}`;
+}
+
+/* ---------- 3. 主流程 ---------- */
+
+function rawUrl() {
+  try {
+    const remote = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    const m = /github\.com[:/]([^/]+)\/(.+?)(?:\.git)?$/.exec(remote);
+    if (!m) return null;
+    const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim() || 'main';
+    return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${branch}/dist/youtube.response.js`;
+  } catch (e) { return null; }
+}
+
+function main() {
+  const upstream = read(P.upstream);
+  const cfg = readJSON(P.config);
+  const catalog = readJSON(P.catalog);
+  const source = readJSONIfExists(P.source, {});
+  const ts = new Date().toISOString();
+
+  const fn = locateTabFunction(upstream);
+  log(`· 定位到上游底部标签过滤函数: ${fn.name}(${fn.params})  [offset ${fn.start}..${fn.end}]  遍历器=${fn.walker}`);
+
+  const repl = replacement(fn);
+  const patched = upstream.slice(0, fn.start) + repl + upstream.slice(fn.end + 1);
+  const out = header(cfg, catalog, ts, source.upstream_build_line || '(未知)') + patched;
+
+  /* --- 语法检查 --- */
+  const tmp = path.join(ROOT, '.build-check.js');
+  fs.writeFileSync(tmp, out);
+  try {
+    execFileSync(process.execPath, ['--check', tmp], { stdio: 'pipe' });
+  } catch (e) {
+    fs.unlinkSync(tmp);
+    const err = (e.stderr ? e.stderr.toString() : e.message).split('\n').slice(0, 4).join('\n');
+    die('生成的脚本语法检查失败:\n' + err);
+  }
+  fs.unlinkSync(tmp);
+  log('· 语法检查 node --check 通过');
+
+  /* --- 自检: 定制层必须真的被接上 --- */
+  if (!out.includes('globalThis.__ytBottomTabFilter = function')) die('注入失败：产物里没有定制过滤器。');
+  if (!repl.includes('__ytBottomTabFilter')) die('注入失败：底部标签函数没有调用定制过滤器。');
+  if (out.indexOf('["SPunlimited"]') >= 0) die('注入失败：上游写死的 ["SPunlimited"] 仍留在产物里。');
+  if (!out.includes('"rendererItems"')) die('注入失败：rendererItems 遍历逻辑丢失。');
+
+  fs.mkdirSync(path.dirname(P.dist), { recursive: true });
+  fs.writeFileSync(P.dist, out);
+
+  const hide = effectiveHide(cfg);
+  const keepMode = (cfg.keep || []).length > 0;
+  const manifest = {
+    generated_at: ts,
+    generator: 'build/build.js',
+    upstream: {
+      url: source.url,
+      referenced_by: source.referenced_by,
+      build_line: source.upstream_build_line,
+      sha256: sha256(upstream),
+      bytes: Buffer.byteLength(upstream),
+    },
+    config_sha256: sha256(read(P.config)),
+    dist: { sha256: sha256(out), bytes: Buffer.byteLength(out), path: 'dist/youtube.response.js' },
+    patch: { function: fn.name, strategy: 'semantic-replace', checks: ['node --check', 'filter-wired'] },
+    bottom_tabs: {
+      mode: keepMode ? 'keep' : 'hide',
+      hide_list: hide,
+      keep_list: cfg.keep || [],
+      keep_unknown: cfg.keepUnknown !== false,
+      legacy_switches_active: cfg.disableLegacy === false,
+      debug: !!cfg.debug,
+    },
+  };
+  fs.writeFileSync(P.manifest, JSON.stringify(manifest, null, 2) + '\n');
+
+  const url = rawUrl();
+  fs.writeFileSync(P.qxline, [
+    `# 生成时间: ${ts}`,
+    '# 用法: 把墨鱼 YoutubeAds.conf 里那一行 script-response-body 的脚本地址换成下面这个 URL',
+    '#       （QuantumultX 是 [rewrite_local] 里那一行；Surge / Loon 是模块里的 script-path）',
+    '# 未配置 git remote 时，<RAW-URL> 是占位符，推到 GitHub 后再跑一次 node build/build.js 会自动填好。',
+    '',
+    `^https?:\\/\\/youtubei\\.googleapis\\.com\\/youtubei\\/v1\\/(browse|next|player|search|reel\\/reel_watch_sequence|guide|account\\/get_setting|get_watch) url script-response-body ${url || '<RAW-URL>'}`,
+    '',
+    '# 改完地址后: 客户端「外部资源 → 全部更新」，然后彻底重启 YouTube App。',
+    '',
+  ].join('\n'));
+
+  log(`· 产物 dist/youtube.response.js  ${manifest.dist.bytes} 字节  sha256=${manifest.dist.sha256.slice(0, 16)}…`);
+  log(`· 模式 ${manifest.bottom_tabs.mode}` + (keepMode
+    ? `  保留=[${manifest.bottom_tabs.keep_list.join(', ')}]  未知标签${manifest.bottom_tabs.keep_unknown ? '保留' : '移除'}`
+    : `  隐藏=[${manifest.bottom_tabs.hide_list.join(', ')}]`));
+  if (url) log(`· 脚本地址: ${url}`);
+  else log('· 未配置 git remote —— dist/qx-rewrite.txt 里的地址留了 <RAW-URL> 占位。');
+}
+
+main();

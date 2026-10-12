@@ -1,0 +1,11 @@
+{
+  "name": "Maasea youtube.response.js — 墨鱼去广告 YoutubeAds.conf 所引用的 YouTube 去广告脚本",
+  "url": "https://raw.githubusercontent.com/Maasea/sgmodule/master/Script/Youtube/youtube.response.js",
+  "repo": "https://github.com/Maasea/sgmodule",
+  "referenced_by": "https://raw.githubusercontent.com/ddgksf2013/Rewrite/master/AdBlock/YoutubeAds.conf",
+  "referenced_by_repo": "https://github.com/ddgksf2013/Rewrite",
+  "upstream_build_line": "// Build: 2026/7/19 16:16:39",
+  "sha256": "f98483d5f5017514f82502253c0db5ce2d4ffb7839887aa2cadc22666f5a7f12",
+  "bytes": 132973,
+  "downloaded_at": "2026-10-12T06:36:12Z"
+}
