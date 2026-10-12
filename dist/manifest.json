@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-12T06:58:47.388Z",
+  "generated_at": "2026-10-12T07:04:54.307Z",
   "generator": "build/build.js",
   "upstream": {
     "url": "https://raw.githubusercontent.com/Maasea/sgmodule/master/Script/Youtube/youtube.response.js",
@@ -10,14 +10,14 @@
   },
   "config_sha256": "d36620183e3dd0f7ffc14da8bbe61112a7721bcaab2adb5d1b99b764f3d3bcb0",
   "dist": {
-    "sha256": "46c2bc0dd34e30d3f4fdb9dec1e396a44de624a07b2f44b3aea272776c4d81f2",
+    "sha256": "1228b881c39606ff76cc2d58def603e66262a72e0eb273494d9e4ed18457784b",
     "bytes": 136349,
     "path": "dist/youtube.response.js"
   },
   "rewrite_conf": {
     "path": "dist/YoutubeAds.custom.conf",
-    "bytes": 2883,
-    "sha256": "8a0e616e8b0f53452d9a4de446bacec075967f73f1570fd17b04784aa5dea55a",
+    "bytes": 3096,
+    "sha256": "cd7715ce9bc5cce7ef239e76b964d753181890c56e8ed8d73fcb5188aeb382f3",
     "rules": 6,
     "script_lines_repointed": 1,
     "upstream": {

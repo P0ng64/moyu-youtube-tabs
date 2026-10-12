@@ -163,6 +163,9 @@ function $i(l,{params:e}){let _ytTabs=globalThis.__ytBottomTabFilter(e),_ytHit=!
 
 - **加了 conf 订阅但没生效**：确认 `[rewrite_remote]` 那行是 `enabled=true`；QX 开着 MITM 且证书已信任；
   在 QX 的「重写」页看一眼规则条数（这份 conf 应该贡献 6 条 + 1 行 hostname）。规则数不对就是订阅没拉下来。
+- **重复的重写规则**：如果 QX 里还留着墨鱼原版 `YoutubeAds.conf` 的那条重写（它指向 Maasea 原版脚本），
+  请把它**禁用或删掉**。两条规则匹配同一个 URL 时只有先匹配到的那条生效 —— 可能轮到原版那条，
+  结果就是「去广告正常，但底部标签没变」。
 - **改了配置但手机上没变化**：客户端要「外部资源 → 全部更新」，并且彻底杀掉 YouTube 再打开。
   走 GitHub raw 时有 **300 秒 CDN 缓存**（`cache-control: max-age=300`，响应头里能看到 `age`），
   刚 push 完马上更新可能还是旧文件 —— 等 5 分钟再来一次，或点开 `dist/qx-rewrite.txt` 确认地址没写错。

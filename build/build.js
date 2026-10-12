@@ -281,6 +281,8 @@ function buildConf(ts, scriptUrl, confSource) {
     '#             或写进配置的 [rewrite_remote]：本文件地址, tag=moyu-youtube-tabs, enabled=true',
     '#             需要开启 MITM 并信任证书（hostname 行已包含在本文件里）。',
     '# 注意：      脚本改动后要在 QX「外部资源 → 全部更新」并彻底重启 YouTube。',
+    '#           若配置里还留着墨鱼原版 YoutubeAds.conf 的那条重写，请禁用它：',
+    '#           两条规则匹配同一个 URL 时只会有先匹配到的那条生效，可能导致定制没生效。',
     '########################################',
     '',
   ].join('\n');
