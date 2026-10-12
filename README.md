@@ -46,7 +46,13 @@ node tests/test-bottom-tabs.js
 
 ## 怎么让手机用上
 
-1. 把本仓库推到 GitHub（public 最省事；private 需要带 token 的 raw 地址）。
+1. 把本仓库推到 GitHub（public 最省事；private 需要带 token 的 raw 地址）。比如：
+
+   ```bash
+   cd /Users/p0ng/Developer/JustForFun/moyu-youtube-tabs
+   gh repo create moyu-youtube-tabs --public --source=. --push    # 或手动 git remote add + push
+   ```
+
    推上去之后 `node build/build.js` 会自动把 `dist/qx-rewrite.txt` 里的地址填成真实 raw 链接。
 2. 打开墨鱼 `YoutubeAds.conf`，找到这一行：
 
@@ -91,8 +97,8 @@ node tests/test-bottom-tabs.js
 1. 下载上游脚本，和 `upstream/youtube.response.js` 比 sha256。
 2. **没变化**：什么都不做（`--force` 可以强制重新生成）。
 3. **有变化**：替换上游文件 → 重新打补丁 → 跑端到端测试 → 更新 `source.json` → git 提交 → 有 remote 就 push。
-4. **打不上补丁或测试失败**：自动回滚到上一个能用的版本，写一份 `SYNC_NEEDS_REVIEW.md` 说明怎么修，
-   并发一条 macOS 通知。**手机上的脚本不会因此变坏**。
+4. **打不上补丁或测试失败**：把上游文件和整个 `dist/` 精确还原到运行前的状态（字节级一致，手机上的脚本不受影响），
+   写一份 `SYNC_NEEDS_REVIEW.md` 说明怎么修，并发一条 macOS 通知。
 
 想手动来一次：
 

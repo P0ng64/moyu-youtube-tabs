@@ -44,6 +44,8 @@ UP_URL="$(node -e 'process.stdout.write(require("./upstream/source.json").url)' 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/moyu-yt-tabs.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 NEW="$TMP/upstream.new.js"
+# 失败时用来精确还原：上游文件 + 整个 dist/ 的运行前快照
+mkdir -p "$TMP/dist.prev" && cp -a dist/. "$TMP/dist.prev/"
 
 log "== 同步检查开始 (mode=$MODE) 上游: $UP_URL"
 if ! curl -fsSL --retry 3 --retry-delay 5 --max-time 90 -o "$NEW" "$UP_URL"; then
@@ -87,8 +89,8 @@ cp "$NEW" upstream/youtube.response.js
 fail() {   # $1 = 原因
   log "✖ $1 —— 回滚到上一个能用的状态"
   cp "$TMP/upstream.prev.js" upstream/youtube.response.js
-  git checkout -- dist 2>/dev/null || true
-  node build/build.js >> "$LOG" 2>&1 || true
+  rm -rf dist && mkdir -p dist && cp -a "$TMP/dist.prev/." dist/   # 精确还原到运行前，避免留下半成品
+  log "已回滚: 上游 ${OLD_BUILD:-?} 保持不变，dist/ 与运行前一致（手机上的脚本不受影响）"
   cat > "$NEEDS" <<EOF
 # 需要人工处理：上游脚本结构变了
 
