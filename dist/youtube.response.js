@@ -1,11 +1,11 @@
 /* ============================================================================
  * 定制层 · YouTube 底部标签栏 (Bottom Tab)                       【勿手改此段】
  * 配置源 : config/bottom-tabs.json
- * 生成器 : build/build.js    生成时间: 2026-10-12T06:43:45.726Z
+ * 生成器 : build/build.js    生成时间: 2026-10-12T06:58:47.388Z
  * 上游   : // Build: 2026/7/19 16:16:39
  * 用 scripts/customize.sh 交互式改配置，改完会重新生成整个文件。
  * ========================================================================== */
-globalThis.__YT_BOTTOM_TABS__ = {"hide":["SPunlimited","FEuploads","FEmusic_immersive"],"keep":[],"keepUnknown":true,"disableLegacy":true,"debug":false};
+globalThis.__YT_BOTTOM_TABS__ = {"hide":[],"keep":["FEwhat_to_watch","FEsubscriptions","FElibrary"],"keepUnknown":false,"disableLegacy":true,"debug":false};
 globalThis.__YT_TAB_CATALOG__ = {"FEwhat_to_watch":{"name":"首页","app":"youtube"},"FEshorts":{"name":"Shorts","app":"youtube"},"FEuploads":{"name":"创建 / 上传 (+)","app":"youtube"},"FEsubscriptions":{"name":"订阅","app":"youtube"},"FElibrary":{"name":"我的 / 媒体库","app":"youtube"},"FEhistory":{"name":"观看记录","app":"youtube"},"FEplaylist_aggregation":{"name":"播放列表","app":"youtube"},"FEmy_videos":{"name":"我的视频","app":"youtube"},"FEtrending":{"name":"热门 / 时下流行","app":"youtube"},"FEexplore":{"name":"探索","app":"youtube"},"FEdownloads":{"name":"下载内容","app":"youtube"},"FEmusic_home":{"name":"YT Music 首页","app":"music"},"FEmusic_explore":{"name":"YT Music 探索","app":"music"},"FEmusic_library_landing":{"name":"YT Music 媒体库","app":"music"},"FEmusic_immersive":{"name":"YT Music 样本 / 选段","app":"music"},"FEmusic_multi_home_and_library":{"name":"YT Music 首页+库(合并版)","app":"music"},"SPunlimited":{"name":"自有上传频道 (YT Music)","app":"music"}};
 (function () {
     var C = globalThis.__YT_BOTTOM_TABS__ || {};

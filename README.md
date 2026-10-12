@@ -13,17 +13,21 @@
 
 ```
 upstream/youtube.response.js   上游原始脚本（只读，永不修改，用来 diff / 重打补丁）
-upstream/source.json           上游地址 + 版本号 + sha256
+upstream/source.json           上游脚本地址 + 版本号 + sha256
+upstream/YoutubeAds.conf       墨鱼那份重写 conf 原文（只读）
+upstream/source.rewrite.json   上游 conf 地址 + sha256
 config/bottom-tabs.json        你的定制配置（由 customize 脚本生成）
 build/build.js                 打补丁 + 生成 dist/（自带语法检查和接线自检）
 build/tabs.catalog.json        已知底部标签 browseId 目录
 scripts/customize.sh           交互式定制 → 改配置 → 自动重新生成 dist/
-scripts/sync-upstream.sh       同步上游（有更新就重打补丁 + 生成 + 提交 + 推送）
+scripts/sync-upstream.sh       同步两个上游（有更新就重新生成 + 测试 + 提交 + 推送）
 scripts/install-monthly-sync.sh  装 launchd 任务，每月 1 号自动同步
-dist/youtube.response.js       ★ 产物：给客户端用的脚本
-dist/qx-rewrite.txt            可直接粘贴的 QuantumultX 重写行
+dist/youtube.response.js       ★ 产物一：给客户端用的去广告脚本（定制版）
+dist/YoutubeAds.custom.conf    ★ 产物二：可直接订阅的 QuantumultX 重写 conf
+dist/qx-rewrite.txt            单独一行式的重写规则 + 订阅地址（方便手贴）
 dist/manifest.json             本次生成的元信息（上游版本、sha256、生效的标签清单）
 tests/test-bottom-tabs.js      端到端测试：喂假的 guide 响应，验证标签真的被移除
+tests/test-conf.js             conf 测试：除脚本地址外必须和墨鱼那份逐字一致
 ```
 
 ## 快速开始
@@ -44,26 +48,31 @@ node tests/test-bottom-tabs.js
 
 想反悔：`./scripts/customize.sh` 再跑一遍，或者 `git checkout config dist` 回到上次提交的状态。
 
-## 怎么让手机用上
+## 怎么让手机用上（QuantumultX）
 
-1. 把本仓库推到 GitHub（public 最省事；private 需要带 token 的 raw 地址）。比如：
+产物 `dist/YoutubeAds.custom.conf` 就是一份标准的 QX 重写订阅：内容 = 墨鱼那份 `YoutubeAds.conf`，
+只把里面「指向 Maasea 脚本」的那一行地址换成本仓库 `dist/youtube.response.js` 的地址，其它逐字不动
+（`hostname` 行、6 条 reject/302 规则都在）。所以订阅它 = 去广告行为跟墨鱼原版一致 + 底部标签栏由你定制。
 
-   ```bash
-   cd /Users/p0ng/Developer/JustForFun/moyu-youtube-tabs
-   gh repo create moyu-youtube-tabs --public --source=. --push    # 或手动 git remote add + push
-   ```
+**方式 A（推荐，能自动跟着仓库更新）**：在 QX 配置的 `[rewrite_remote]` 里加一行
 
-   推上去之后 `node build/build.js` 会自动把 `dist/qx-rewrite.txt` 里的地址填成真实 raw 链接。
-2. 打开墨鱼 `YoutubeAds.conf`，找到这一行：
+```
+https://raw.githubusercontent.com/P0ng64/moyu-youtube-tabs/main/dist/YoutubeAds.custom.conf, tag=moyu-youtube-tabs, update-interval=86400, enabled=true
+```
 
-   ```
-   ^https?:\/\/youtubei\.googleapis\.com\/youtubei\/v1\/(browse|next|player|search|reel\/reel_watch_sequence|guide|account\/get_setting|get_watch) url script-response-body https://raw.githubusercontent.com/Maasea/sgmodule/refs/heads/master/Script/Youtube/youtube.response.js
-   ```
+（或在 QX 界面的「重写」里添加远程资源，填入同一个地址 —— 不同版本入口名字略有差别。）
 
-   把最后那个 `https://raw.githubusercontent.com/...youtube.response.js` 换成 `dist/qx-rewrite.txt` 里给你的地址。
-3. 客户端里「外部资源 → 全部更新」，然后**彻底退出** YouTube 再打开（只切后台不行）。
+**方式 B（手动）**：把墨鱼 `YoutubeAds.conf` 里那一行 `script-response-body` 的地址，换成
+`dist/qx-rewrite.txt` 里给出的脚本地址。
 
-> 只改了 `script-response-body` 的地址，去广告、后台播放、画中画这些原有功能一个都没动。
+两者之后都要：
+
+1. QX 里开启 MITM 并信任证书（conf 里自带 `hostname` 行；若客户端提示 MITM 主机名没生效，就把那行内容合并进你配置的 `[mitm]`）。
+2. 执行「外部资源 → 全部更新」——**改了标签配置后也要做一次**（脚本文件变了，conf 本身没变）。
+3. **彻底退出** YouTube 再打开（只切后台不行，底部标签是启动时拉的）。
+
+> 只改了「底部标签配置」时：`dist/youtube.response.js` 变、`dist/YoutubeAds.custom.conf` 不变，
+> 因为 conf 只是引用脚本地址。所以方式 A 的用户不用改任何订阅，更新一次外部资源就行。
 
 ## 配置说明（config/bottom-tabs.json）
 
@@ -92,13 +101,17 @@ node tests/test-bottom-tabs.js
 ./scripts/uninstall-monthly-sync.sh        # 卸载
 ```
 
-任务做的事（`scripts/sync-upstream.sh`）：
+任务做的事（`scripts/sync-upstream.sh`，盯着**两个**上游）：
 
-1. 下载上游脚本，和 `upstream/youtube.response.js` 比 sha256。
-2. **没变化**：什么都不做（`--force` 可以强制重新生成）。
-3. **有变化**：替换上游文件 → 重新打补丁 → 跑端到端测试 → 更新 `source.json` → git 提交 → 有 remote 就 push。
+1. 下载上游脚本（Maasea）+ 墨鱼的重写 conf，分别和 `upstream/` 里的副本比 sha256，各自做完整体检
+   （防 HTML 报错页/截断文件：脚本要 >50KB 且含 `rendererItems`/`toBinary`；conf 要含 ` url ` 和 `script-response-body`）。
+2. **都没变化**：什么都不做（`--force` 可以强制重新生成）。
+3. **有变化**：替换上游文件 → 重新打补丁 + 重新生成 conf → 跑两个测试 → 更新对应的 `source*.json` → git 提交 → 有 remote 就 push。
 4. **打不上补丁或测试失败**：把上游文件和整个 `dist/` 精确还原到运行前的状态（字节级一致，手机上的脚本不受影响），
    写一份 `SYNC_NEEDS_REVIEW.md` 说明怎么修，并发一条 macOS 通知。
+
+两个上游各自的变化都会反映到产物：脚本变了 → `dist/youtube.response.js` 变；墨鱼 conf 变了（加规则、改 hostname 等）
+→ `dist/YoutubeAds.custom.conf` 跟着变。订阅了 conf 的客户端下次更新外部资源就同步到了。
 
 想手动来一次：
 
@@ -141,9 +154,13 @@ function $i(l,{params:e}){let _ytTabs=globalThis.__ytBottomTabFilter(e),_ytHit=!
 - 任一步失败就报错退出，不会产出半成品 `dist/`。
 - `tests/test-bottom-tabs.js` 会真的起一个假的 QuantumultX/Surge 运行环境，喂一个手工拼的 protobuf `guide` 响应，
   检查哪些标签被移除了（10 个用例，覆盖黑白名单、未知标签、上游开关、labelRender 形式、YT Music）。
+- `tests/test-conf.js` 逐行比对生成的 conf 和墨鱼那份：除 `script-` 那一行的地址外必须逐字一致，
+  顺带校验每条规则的正则能编译、动作是合法写法、没有残留上游脚本地址（14 项检查）。
 
 ## 常见问题
 
+- **加了 conf 订阅但没生效**：确认 `[rewrite_remote]` 那行是 `enabled=true`；QX 开着 MITM 且证书已信任；
+  在 QX 的「重写」页看一眼规则条数（这份 conf 应该贡献 6 条 + 1 行 hostname）。规则数不对就是订阅没拉下来。
 - **改了配置但手机上没变化**：客户端要「外部资源 → 全部更新」，并且彻底杀掉 YouTube 再打开；若走了 GitHub raw，
   还有 CDN 缓存，等一两分钟或改一次文件名（版本号）再试。
 - **Simulator/真机上看不到效果**：底部标签是一次性拉取的，重启 App 才会重新请求 `guide`。

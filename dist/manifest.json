@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-12T06:43:45.726Z",
+  "generated_at": "2026-10-12T06:58:47.388Z",
   "generator": "build/build.js",
   "upstream": {
     "url": "https://raw.githubusercontent.com/Maasea/sgmodule/master/Script/Youtube/youtube.response.js",
@@ -8,11 +8,23 @@
     "sha256": "f98483d5f5017514f82502253c0db5ce2d4ffb7839887aa2cadc22666f5a7f12",
     "bytes": 132973
   },
-  "config_sha256": "8bfe432b9eaa5afaaf3a3816cf805d08cb58004974a27bb31de220579e6294ed",
+  "config_sha256": "d36620183e3dd0f7ffc14da8bbe61112a7721bcaab2adb5d1b99b764f3d3bcb0",
   "dist": {
-    "sha256": "0520c22784b7260afefcdeecb43f59ca8e067aba0e33c1bfdece6d893a01e543",
-    "bytes": 136346,
+    "sha256": "46c2bc0dd34e30d3f4fdb9dec1e396a44de624a07b2f44b3aea272776c4d81f2",
+    "bytes": 136349,
     "path": "dist/youtube.response.js"
+  },
+  "rewrite_conf": {
+    "path": "dist/YoutubeAds.custom.conf",
+    "bytes": 2883,
+    "sha256": "8a0e616e8b0f53452d9a4de446bacec075967f73f1570fd17b04784aa5dea55a",
+    "rules": 6,
+    "script_lines_repointed": 1,
+    "upstream": {
+      "url": "https://raw.githubusercontent.com/ddgksf2013/Rewrite/master/AdBlock/YoutubeAds.conf",
+      "sha256": "480335f6327cd3a8e3c8dab4194bd7783f465dcc6f218a7b32c3aec89782b2b4",
+      "bytes": 1899
+    }
   },
   "patch": {
     "function": "$i",
@@ -23,14 +35,14 @@
     ]
   },
   "bottom_tabs": {
-    "mode": "hide",
-    "hide_list": [
-      "SPunlimited",
-      "FEuploads",
-      "FEmusic_immersive"
+    "mode": "keep",
+    "hide_list": [],
+    "keep_list": [
+      "FEwhat_to_watch",
+      "FEsubscriptions",
+      "FElibrary"
     ],
-    "keep_list": [],
-    "keep_unknown": true,
+    "keep_unknown": false,
     "legacy_switches_active": false,
     "debug": false
   }

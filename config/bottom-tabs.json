@@ -1,12 +1,16 @@
 {
   "version": 1,
-  "mode": "hide",
-  "hide": ["SPunlimited", "FEuploads", "FEmusic_immersive"],
-  "keep": [],
-  "keepUnknown": true,
+  "mode": "keep",
+  "hide": [],
+  "keep": [
+    "FEwhat_to_watch",
+    "FEsubscriptions",
+    "FElibrary"
+  ],
+  "keepUnknown": false,
   "disableLegacy": true,
   "debug": false,
   "catalogExtras": {},
-  "updatedAt": "seed",
-  "note": "改这个文件请用 scripts/customize.sh（它会重新生成 dist/）；直接手改也行，但改完必须跑一次 scripts/customize.sh --rebuild 或 node build/build.js"
+  "updatedAt": "2026-10-12T06:48:31.873Z",
+  "note": "由 scripts/customize.sh 生成；改完会重新生成 dist/youtube.response.js"
 }

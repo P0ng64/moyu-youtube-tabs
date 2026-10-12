@@ -200,11 +200,12 @@ function rebuild() {
   }
   console.log(`  产物: dist/youtube.response.js (${bytes} 字节, sha256 ${m.dist.sha256.slice(0, 12)}…)`);
   console.log(`\n${C.b}接下来（只需做一次/每次改完做一次）${C.r}`);
-  console.log('  1. 让手机能访问到 dist/youtube.response.js：');
-  console.log(`     · 若本仓库已推到 GitHub，脚本地址见 ${C.c}dist/qx-rewrite.txt${C.r}（里面是可直接粘贴的重写行）`);
-  console.log(`     · 也可自己把 dist/youtube.response.js 放到任意能直链的地方`);
-  console.log('  2. 把墨鱼 YoutubeAds.conf 里那一行 script-response-body 的地址换成上面的地址');
-  console.log('  3. 客户端里执行「外部资源 → 全部更新」，然后彻底退出并重开 YouTube');
+  console.log('  1. 让手机能用上：把本仓库推到 GitHub 后，在 QuantumultX 订阅这个 conf：');
+  console.log(`     ${C.c}dist/YoutubeAds.custom.conf${C.r}  <- 地址见 ${C.c}dist/qx-rewrite.txt${C.r} 开头两行`);
+  console.log('     （配置里写: [rewrite_remote] 加一行 "<conf 的 raw 地址>, tag=moyu-youtube-tabs, enabled=true"）');
+  console.log('     或者：把墨鱼 YoutubeAds.conf 里那行 script-response-body 的地址换成 dist/youtube.response.js 的地址');
+  console.log('  2. 客户端里执行「外部资源 → 全部更新」（只改了标签配置时，脚本变了、conf 没变，也要更新一次）');
+  console.log('  3. 彻底退出并重开 YouTube（只切后台不行，底部标签是启动时拉的）');
   return 0;
 }
 

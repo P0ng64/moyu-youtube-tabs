@@ -22,9 +22,12 @@ const ROOT = path.resolve(__dirname, '..');
 const P = {
   upstream: path.join(ROOT, 'upstream', 'youtube.response.js'),
   source: path.join(ROOT, 'upstream', 'source.json'),
+  confUpstream: path.join(ROOT, 'upstream', 'YoutubeAds.conf'),
+  confSource: path.join(ROOT, 'upstream', 'source.rewrite.json'),
   config: path.join(ROOT, 'config', 'bottom-tabs.json'),
   catalog: path.join(ROOT, 'build', 'tabs.catalog.json'),
   dist: path.join(ROOT, 'dist', 'youtube.response.js'),
+  distConf: path.join(ROOT, 'dist', 'YoutubeAds.custom.conf'),
   manifest: path.join(ROOT, 'dist', 'manifest.json'),
   qxline: path.join(ROOT, 'dist', 'qx-rewrite.txt'),
 };
@@ -224,6 +227,78 @@ function replacement(fn) {
     `}}),{bodyChanged:${hit},stateChanged:!1}}`;
 }
 
+/* ---------- 2.5 生成 QuantumultX 重写订阅 conf ---------- *
+ * 直接把墨鱼那份 YoutubeAds.conf 拿过来，只把「指向上游脚本的 URL」换成我们定制版的地址，
+ * 其余（注释、hostname、各条 reject/302 规则）逐字保留 —— 这样它既能当 QX 订阅资源用，
+ * 也保证去广告本身的行为和墨鱼那份完全一致。
+ */
+const SCRIPT_BASENAME = 'youtube.response.js';
+
+function buildConf(ts, scriptUrl, confSource) {
+  let upstreamConf;
+  try {
+    upstreamConf = read(P.confUpstream);
+  } catch (e) {
+    log('· 跳过 conf 生成：找不到 upstream/YoutubeAds.conf（跑一次 scripts/sync-upstream.sh 会补上）');
+    return null;
+  }
+
+  // 规则行 = 非注释、非空、且含 " url " 的行；hostname = … 这类指令行不算规则
+  const lineIsRule = (l) => l.trim() && !/^\s*#/.test(l) && /\surl\s+/.test(l);
+  let repointed = 0;
+  const outLines = upstreamConf.split('\n').map((line) => {
+    if (!lineIsRule(line)) return line;
+    return line.replace(/(\burl\s+script-(?:response|request)-(?:body|header)\s+)(\S+)/g, (m, head, u) => {
+      if (!u.includes(SCRIPT_BASENAME)) return m;          // 只重定向「上游那个脚本」的行，别的脚本不碰
+      repointed++;
+      return head + scriptUrl;
+    });
+  });
+  if (repointed === 0) {
+    die(`上游 YoutubeAds.conf 里找不到指向 ${SCRIPT_BASENAME} 的 script 行 —— 上游结构变了，需要人工检查。`);
+  }
+
+  const rules = outLines.filter(lineIsRule);
+  rules.forEach((l) => {
+    if (/Maasea\/sgmodule/.test(l)) die(`生成的 conf 里还有上游脚本地址没换掉:\n  ${l}`);
+    if (!/\surl\s+(reject|reject-\d+|302|307|script-response-body|script-request-body|script-response-header|script-request-header)\b/.test(l)) {
+      die(`生成的 conf 里有条规则看不懂（可能上游换了写法）:\n  ${l}`);
+    }
+    const pattern = l.split(/\s+url\s+/)[0];
+    try { new RegExp(pattern); } catch (err) { die(`规则里的正则写错了，客户端会直接报错:\n  ${pattern}\n  ${err.message}`); }
+  });
+
+  const src = confSource || {};
+  const head = [
+    '########################################',
+    '# 本文件由 moyu-youtube-tabs 自动生成，请勿手改（改配置请跑 scripts/customize.sh）',
+    `# 生成时间：  ${ts}`,
+    `# 定制版脚本：${scriptUrl}`,
+    `# 上游重写：  ${src.url || '?'}`,
+    `# 上游版本：  sha256 ${(src.sha256 || '?').slice(0, 16)}…  共 ${rules.length} 条规则`,
+    '# 定制内容：  YouTube 底部标签栏 (Bottom Tab) 可定制，配置见 config/bottom-tabs.json',
+    '# 用法：      在 QuantumultX「重写 → 添加订阅」填本文件的 raw 地址；',
+    '#             或写进配置的 [rewrite_remote]：本文件地址, tag=moyu-youtube-tabs, enabled=true',
+    '#             需要开启 MITM 并信任证书（hostname 行已包含在本文件里）。',
+    '# 注意：      脚本改动后要在 QX「外部资源 → 全部更新」并彻底重启 YouTube。',
+    '########################################',
+    '',
+  ].join('\n');
+
+  const out = head + outLines.join('\n').replace(/\n*$/, '\n');
+  fs.mkdirSync(path.dirname(P.distConf), { recursive: true });
+  fs.writeFileSync(P.distConf, out);
+  log(`· 产物 ${path.relative(ROOT, P.distConf)}  ${Buffer.byteLength(out)} 字节  ${rules.length} 条规则（重定向 ${repointed} 处脚本地址）`);
+  return {
+    path: 'dist/YoutubeAds.custom.conf',
+    bytes: Buffer.byteLength(out),
+    sha256: sha256(out),
+    rules: rules.length,
+    script_lines_repointed: repointed,
+    upstream: { url: src.url, sha256: src.sha256, bytes: src.bytes },
+  };
+}
+
 /* ---------- 3. 主流程 ---------- */
 
 function rawUrl() {
@@ -242,6 +317,7 @@ function main() {
   const catalog = readJSON(P.catalog);
   const source = readJSONIfExists(P.source, {});
   const ts = new Date().toISOString();
+  const url = rawUrl();
 
   const fn = locateTabFunction(upstream);
   log(`· 定位到上游底部标签过滤函数: ${fn.name}(${fn.params})  [offset ${fn.start}..${fn.end}]  遍历器=${fn.walker}`);
@@ -275,6 +351,13 @@ function main() {
   }
   if (!patched.includes('"rendererItems"')) die('注入失败：rendererItems 遍历逻辑丢失。');
 
+  /* --- 生成 QX 重写订阅 conf --- */
+  const where = url || 'https://raw.githubusercontent.com/<USERNAME>/<REPO>/main/dist/youtube.response.js';
+  const confMeta = buildConf(ts, where, readJSONIfExists(P.confSource, {}));
+  if (confMeta && !url) {
+    log('  ⚠ 还没配 git remote：conf 里的脚本地址是占位符，把 <USERNAME>/<REPO> 换成你的再推上去。');
+  }
+
   fs.mkdirSync(path.dirname(P.dist), { recursive: true });
   fs.writeFileSync(P.dist, out);
 
@@ -292,6 +375,7 @@ function main() {
     },
     config_sha256: sha256(read(P.config)),
     dist: { sha256: sha256(out), bytes: Buffer.byteLength(out), path: 'dist/youtube.response.js' },
+    rewrite_conf: confMeta,
     patch: { function: fn.name, strategy: 'semantic-replace', checks: ['node --check', 'filter-wired'] },
     bottom_tabs: {
       mode: keepMode ? 'keep' : 'hide',
@@ -304,14 +388,19 @@ function main() {
   };
   fs.writeFileSync(P.manifest, JSON.stringify(manifest, null, 2) + '\n');
 
-  const url = rawUrl();
+  const confName = 'dist/YoutubeAds.custom.conf';
   fs.writeFileSync(P.qxline, [
     `# 生成时间: ${ts}`,
-    '# 用法: 把墨鱼 YoutubeAds.conf 里那一行 script-response-body 的脚本地址换成下面这个 URL',
-    '#       （QuantumultX 是 [rewrite_local] 里那一行；Surge / Loon 是模块里的 script-path）',
-    '# 未配置 git remote 时，<RAW-URL> 是占位符，推到 GitHub 后再跑一次 node build/build.js 会自动填好。',
+    '#',
+    '# 推荐用法（能自动跟着仓库更新）: 在 QuantumultX 里订阅这个 conf ——',
+    `#   本仓库的 dist/YoutubeAds.custom.conf${url ? '，即 ' + url.replace(/dist\/youtube\.response\.js$/, confName) : '（推到 GitHub 后用它的 raw 地址）'}`,
+    '#   或在配置的 [rewrite_remote] 加一行:  <conf 的 raw 地址>, tag=moyu-youtube-tabs, enabled=true',
+    '#',
+    '# 手动用法: 把墨鱼 YoutubeAds.conf 里那一行 script-response-body 的脚本地址换成下面这个 URL',
+    '#           （QuantumultX 是 [rewrite_local] 里那一行；Surge / Loon 是模块里的 script-path）',
+    `# 未配置 git remote 时地址是占位符：把 <USERNAME>/<REPO> 换成你的账号/仓库名再跑一次 node build/build.js 会自动填好。`,
     '',
-    `^https?:\\/\\/youtubei\\.googleapis\\.com\\/youtubei\\/v1\\/(browse|next|player|search|reel\\/reel_watch_sequence|guide|account\\/get_setting|get_watch) url script-response-body ${url || '<RAW-URL>'}`,
+    `^https?:\\/\\/youtubei\\.googleapis\\.com\\/youtubei\\/v1\\/(browse|next|player|search|reel\\/reel_watch_sequence|guide|account\\/get_setting|get_watch) url script-response-body ${url || 'https://raw.githubusercontent.com/<USERNAME>/<REPO>/main/dist/youtube.response.js'}`,
     '',
     '# 改完地址后: 客户端「外部资源 → 全部更新」，然后彻底重启 YouTube App。',
     '',
@@ -321,8 +410,12 @@ function main() {
   log(`· 模式 ${manifest.bottom_tabs.mode}` + (keepMode
     ? `  保留=[${manifest.bottom_tabs.keep_list.join(', ')}]  未知标签${manifest.bottom_tabs.keep_unknown ? '保留' : '移除'}`
     : `  隐藏=[${manifest.bottom_tabs.hide_list.join(', ')}]`));
-  if (url) log(`· 脚本地址: ${url}`);
-  else log('· 未配置 git remote —— dist/qx-rewrite.txt 里的地址留了 <RAW-URL> 占位。');
+  if (url) {
+    log(`· 脚本地址: ${url}`);
+    log(`· QX 订阅: ${url.replace(/dist\/youtube\.response\.js$/, confName)}`);
+  } else {
+    log('· 未配置 git remote —— dist/qx-rewrite.txt 和 dist/YoutubeAds.custom.conf 里的地址是占位符。');
+  }
 }
 
 main();
