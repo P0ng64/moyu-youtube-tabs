@@ -1,4 +1,4 @@
-# 生成时间: 2026-10-12T06:43:23.042Z
+# 生成时间: 2026-10-12T06:43:45.726Z
 # 用法: 把墨鱼 YoutubeAds.conf 里那一行 script-response-body 的脚本地址换成下面这个 URL
 #       （QuantumultX 是 [rewrite_local] 里那一行；Surge / Loon 是模块里的 script-path）
 # 未配置 git remote 时，<RAW-URL> 是占位符，推到 GitHub 后再跑一次 node build/build.js 会自动填好。
