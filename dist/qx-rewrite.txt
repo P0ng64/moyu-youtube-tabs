@@ -1,4 +1,4 @@
-# 生成时间: 2026-10-27T05:46:21.779Z
+# 生成时间: 2026-10-27T05:54:23.347Z
 #
 # 推荐用法（能自动跟着仓库更新）: 在 QuantumultX 里订阅这个 conf ——
 #   本仓库的 dist/YoutubeAds.custom.conf，即 https://raw.githubusercontent.com/P0ng64/moyu-youtube-tabs/main/dist/YoutubeAds.custom.conf

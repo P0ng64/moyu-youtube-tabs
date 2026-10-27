@@ -1,6 +1,7 @@
 {
   "_comment": "已知的底部导航（Bottom Tab）browseId 目录。verified=true 表示这个 ID 在实际的 guide 响应里见过（2026-10 用 iOS 客户端上下文直接请求 youtubei/v1/guide 核对过），或上游脚本自己写死过。新 UI 里同一个项叫 pivotIdentifier，值不变，所以新旧两种结构共用这份目录。",
   "_note_2026_10": "2026-10 起 YouTube 新版 UI 把底部栏从 guideSectionRenderer.rendererItems 换成了 pivotBarRenderer.items[].pivotBarItemRenderer.pivotIdentifier。字段号恰好对齐（117866661 / 318370163 / 117501096，标签标识都在字段 1），所以过滤器不用改代码就能继续工作；实测匿名 iOS 的底栏是 首页 / Explore / 订阅 / 我的 四项，Shorts 和上传入口不在匿名响应里（上传进度挂在 You 标签的 progressIndicator 上，即 progressIndicator.uploadProgressArrowRenderer）。",
+  "_note_ab": "底栏项是账号/灰度相关的 A/B。真机实测过另一个账号（新版 UI，登录态）只收到 4 项：FEwhat_to_watch / FEshorts / FEuploads / FElibrary —— 没有 FEsubscriptions，也没有 FEexplore（订阅内容被挪到了顶部 Tab）。所以「某个标签不见了」未必是脚本删的：先看调试通知里服务端给了哪几项，再判断该不该动 hide 清单。",
   "items": {
     "FEwhat_to_watch":   { "name": "首页",                    "app": "youtube", "verified": true  },
     "FEshorts":          { "name": "Shorts",                  "app": "youtube", "verified": true  },
