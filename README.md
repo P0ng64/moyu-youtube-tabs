@@ -149,6 +149,29 @@ function $i(l,{params:e}){let _ytTabs=globalThis.__ytBottomTabFilter(e),_ytHit=!
 过滤器本体放在文件最前面（`globalThis.__YT_BOTTOM_TABS__` 就是你的配置），
 所以**改配置 = 重新生成这个文件**，脚本行为立刻跟着变。
 
+### 2026-10 新 UI：底部栏换成了 pivotBarRenderer
+
+YouTube 新版 UI 不再用 `guideSectionRenderer.rendererItems`，改成：
+
+```
+Guide{ items(4) → Items1{ pivotBarRenderer(117866661) → PivotBarRenderer{ items(1) → Items2{
+    pivotBarItemRenderer(117501096)      ← 有图标+文字的标签
+  | pivotBarIconOnlyItemRenderer(318370163)  ← 只有图标的标签
+} → PivotBarItemRenderer{ pivotIdentifier(1), navigationEndpoint(2), title(4), targetId(10) } } } }
+```
+
+关键点：**字段号正好对得上**——`117866661` 既是旧的 `guideSectionRenderer` 又是新的 `pivotBarRenderer`，
+`318370163`/`117501096` 既是旧的 `iconRender`/`labelRender` 又是新的 icon-only / item 包装，
+而旧的 `browseId` 和新的 `pivotIdentifier` **都在字段 1**。所以现有过滤器（读 `iconRender.browseId ?? labelRender.browseId`）
+在新形状下**照旧能读到标签 ID，不用改代码**；删掉项后重新编码时，`title`/`targetId`/`navigationEndpoint` 这些
+「不认识的字段」由 protobuf 运行时原样带回，标签不会变空白。
+
+实测（2026-10，匿名 iOS 客户端上下文直接请求 `youtubei/v1/guide`）：底栏是 **首页 / Explore / 订阅 / 我的** 四项；
+Shorts 和上传入口不在匿名响应里（上传进度挂在「我的」标签的 `progressIndicator.uploadProgressArrowRenderer` 上）。
+`tests/test-bottom-tabs.js` 里有 4 个 pivot 形状的用例覆盖：白名单三项全留、`keepUnknown`、黑名单、icon-only 变体。
+
+> 如果哪天结构再变，打开调试日志会直接告诉你：`[YT-Tabs] ⚠ 这个 guide 响应里没有底部标签项结构` —— 不会静默失效。
+
 安全网：
 - 生成后先 `node --check` 语法检查，再做一次「接线自检」（确认过滤器真的被调用、上游写死的 `["SPunlimited"]` 已消失）。
 - 任一步失败就报错退出，不会产出半成品 `dist/`。
@@ -166,6 +189,12 @@ function $i(l,{params:e}){let _ytTabs=globalThis.__ytBottomTabFilter(e),_ytHit=!
 - **重复的重写规则**：如果 QX 里还留着墨鱼原版 `YoutubeAds.conf` 的那条重写（它指向 Maasea 原版脚本），
   请把它**禁用或删掉**。两条规则匹配同一个 URL 时只有先匹配到的那条生效 —— 可能轮到原版那条，
   结果就是「去广告正常，但底部标签没变」。
+- **白名单模式下某个标签"消失"了**：`keep` 模式 + `keepUnknown:false` 时，凡是 ID 不在 `keep` 里、
+  且在目录里查不到的项都会被移除 —— 新 UI 换 ID、或服务端给某个标签下发了一个目录里没有的 ID，就会误伤
+  （典型症状：你想要 首页/订阅/我的，结果只剩 首页/我的）。两个选择：
+  1. `keepUnknown: true`（推荐）—— 只移除"目录里认识但不在白名单"的标签，服务端新增/改名的标签一律保留；
+  2. 用黑名单 `mode: "hide"`，只点名要隐藏的 ID，其它一律不动 —— 对新 UI 最稳。
+  想确认服务端到底发了哪些 ID：`./scripts/customize.sh --debug`，更新外部资源并重启 YouTube 后看客户端日志里的 `[YT-Tabs]` 行。
 - **改了配置但手机上没变化**：客户端要「外部资源 → 全部更新」，并且彻底杀掉 YouTube 再打开。
   走 GitHub raw 时有 **300 秒 CDN 缓存**（`cache-control: max-age=300`，响应头里能看到 `age`），
   刚 push 完马上更新可能还是旧文件 —— 等 5 分钟再来一次，或点开 `dist/qx-rewrite.txt` 确认地址没写错。

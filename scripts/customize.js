@@ -206,6 +206,8 @@ function rebuild() {
   console.log('     或者：把墨鱼 YoutubeAds.conf 里那行 script-response-body 的地址换成 dist/youtube.response.js 的地址');
   console.log('  2. 客户端里执行「外部资源 → 全部更新」（只改了标签配置时，脚本变了、conf 没变，也要更新一次）');
   console.log('  3. 彻底退出并重开 YouTube（只切后台不行，底部标签是启动时拉的）');
+  console.log(`  4. 想确认服务端到底发了哪些标签 ID: ${C.c}./scripts/customize.sh --debug${C.r}，`);
+  console.log('     更新外部资源后重启 YouTube，在客户端日志里搜 [YT-Tabs] 就能看到实际 ID。');
   return 0;
 }
 
@@ -213,6 +215,16 @@ function rebuild() {
 (async () => {
   try {
     if (args.includes('--show')) { console.log(`${C.b}当前配置:${C.r}`); describe(loadCfg()); return; }
+    if (args.includes('--debug') || args.includes('--no-debug')) {
+      const c = loadCfg();
+      c.debug = args.includes('--debug');
+      c.updatedAt = new Date().toISOString();
+      fs.writeFileSync(CFG, JSON.stringify(c, null, 2) + '\n');
+      console.log(c.debug
+        ? '已打开调试日志 —— 客户端日志里会打印 [YT-Tabs] 底部标签: <ID> (名称)'
+        : '已关闭调试日志');
+      process.exit(rebuild());
+    }
     if (args.includes('--rebuild')) process.exit(rebuild());
     const rc = await interactive();
     rl.close();

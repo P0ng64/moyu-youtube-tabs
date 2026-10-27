@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-12T07:04:54.307Z",
+  "generated_at": "2026-10-27T05:34:19.098Z",
   "generator": "build/build.js",
   "upstream": {
     "url": "https://raw.githubusercontent.com/Maasea/sgmodule/master/Script/Youtube/youtube.response.js",
@@ -8,16 +8,16 @@
     "sha256": "f98483d5f5017514f82502253c0db5ce2d4ffb7839887aa2cadc22666f5a7f12",
     "bytes": 132973
   },
-  "config_sha256": "d36620183e3dd0f7ffc14da8bbe61112a7721bcaab2adb5d1b99b764f3d3bcb0",
+  "config_sha256": "e8f101563aff8b369f84b37fdf13ed7306cab6fcff0d55355bd0ae59094eca84",
   "dist": {
-    "sha256": "1228b881c39606ff76cc2d58def603e66262a72e0eb273494d9e4ed18457784b",
-    "bytes": 136349,
+    "sha256": "2b2881f8a24418d10646222b8e392e094264db3b40bd30f08598064758ed57c7",
+    "bytes": 137232,
     "path": "dist/youtube.response.js"
   },
   "rewrite_conf": {
     "path": "dist/YoutubeAds.custom.conf",
     "bytes": 3096,
-    "sha256": "cd7715ce9bc5cce7ef239e76b964d753181890c56e8ed8d73fcb5188aeb382f3",
+    "sha256": "1b5b0496f87f8cd2d686ac5450cec3d0968cd8a25e1cd919e2c34511cca3d498",
     "rules": 6,
     "script_lines_repointed": 1,
     "upstream": {
@@ -42,7 +42,7 @@
       "FEsubscriptions",
       "FElibrary"
     ],
-    "keep_unknown": false,
+    "keep_unknown": true,
     "legacy_switches_active": false,
     "debug": false
   }

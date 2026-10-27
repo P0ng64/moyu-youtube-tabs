@@ -50,17 +50,36 @@ globalThis.__mkGuide = function (ids, useLabel) {
     var item = pb.ld(117866661, acc);
     return new Uint8Array(pb.ld(6, item));
 };
-/* 从响应字节里捞出所有像 browseId 的 ASCII 串 */
-globalThis.__extractTabs = function (bytes) {
+/* 新 UI (2026-10) 的形状: Guide{ items(4) -> Items1{ pivotBarRenderer(117866661)
+   -> PivotBarRenderer{ items(1) -> Items2{ pivotBarItemRenderer(117501096)
+                                          | pivotBarIconOnlyItemRenderer(318370163) }
+   -> PivotBarItemRenderer{ pivotIdentifier(1), navigationEndpoint(2), title(4), targetId(10) } } } } }
+   注意：每个条目必须是独立的 field-1 条目（重复字段），不能拼成一条，否则旧的 schema 会把它解成一个项。 */
+globalThis.__mkPivotGuide = function (ids, opts) {
+    var pb = globalThis.__pb, acc = [], i;
+    opts = opts || {};
+    for (i = 0; i < ids.length; i++) {
+        var id = ids[i];
+        var body = pb.ld(1, pb.str(id))
+            .concat(pb.ld(2, pb.ld(48687626, pb.ld(2, pb.str(id)))))
+            .concat(pb.ld(4, pb.ld(75730170, pb.ld(2, pb.str('title-' + id)))))
+            .concat(pb.ld(10, pb.str('pivot-' + i)));
+        var wrapper = (opts.iconOnly || []).indexOf(id) >= 0 ? 318370163 : 117501096;
+        acc = acc.concat(pb.ld(1, pb.ld(wrapper, body)));
+    }
+    return new Uint8Array(pb.ld(4, pb.ld(117866661, acc)));
+};
+/* 从响应字节里捞出所有可打印 ASCII 串（用来既看 tab ID，也验证 title/targetId 这些未知字段有没有留住） */
+globalThis.__allStrings = function (bytes) {
     var out = [], cur = '', i, b, ok;
     for (i = 0; i < bytes.length; i++) {
         b = bytes[i];
-        ok = (b >= 48 && b <= 57) || (b >= 65 && b <= 90) || (b >= 97 && b <= 122) || b === 95;
+        ok = (b >= 48 && b <= 57) || (b >= 65 && b <= 90) || (b >= 97 && b <= 122) || b === 95 || b === 45 || b === 46;
         if (ok) cur += String.fromCharCode(b);
         else { if (cur.length >= 5) out.push(cur); cur = ''; }
     }
     if (cur.length >= 5) out.push(cur);
-    return out.filter(function (s) { return /^(FE|SP)[A-Za-z0-9_]+$/.test(s); });
+    return out;
 };
 `;
 
@@ -84,9 +103,13 @@ function runScript(ids, opts = {}) {
     };
     ctx.__IDS = ids;
     ctx.__LABEL = !!opts.useLabel;
+    ctx.__SHAPE = opts.shape || 'legacy';
+    ctx.__ICON_ONLY = opts.iconOnly || [];
     // Surge 用 $response.body 传二进制体，QuantumultX/Loon 用 $response.bodyBytes
     const bodyKey = platform === 'surge' ? 'body' : 'bodyBytes';
-    vm.runInContext(`globalThis.$response = { ${bodyKey}: globalThis.__mkGuide(globalThis.__IDS, globalThis.__LABEL) };`, ctx);
+    vm.runInContext(`globalThis.$response = { ${bodyKey}: (globalThis.__SHAPE === 'pivot'
+        ? globalThis.__mkPivotGuide(globalThis.__IDS, { iconOnly: globalThis.__ICON_ONLY })
+        : globalThis.__mkGuide(globalThis.__IDS, globalThis.__LABEL)) };`, ctx);
 
     let done = null;
     ctx.$done = (r) => { done = r; };
@@ -94,9 +117,11 @@ function runScript(ids, opts = {}) {
 
     if (!done) throw new Error('脚本没有调用 $done');
     const body = done.bodyBytes || done.body;                          // QuanX: bodyBytes / Surge: body
-    if (!body) return ids.slice();                                     // 没有回写 = 一个标签都没动
+    if (!body) { lastStrings = []; return ids.slice(); }               // 没有回写 = 一个标签都没动
     ctx.__out = body;
-    return vm.runInContext('globalThis.__extractTabs(new Uint8Array(globalThis.__out))', ctx);
+    const all = vm.runInContext('globalThis.__allStrings(new Uint8Array(globalThis.__out))', ctx);
+    lastStrings = all;
+    return all.filter((s) => /^(FE|SP)[A-Za-z0-9_]+$/.test(s));
 }
 
 function build() {
@@ -108,6 +133,7 @@ function writeCfg(cfg) {
 
 /* ---------- 测试用例 ---------- */
 const ALL = ['FEwhat_to_watch', 'FEshorts', 'FEuploads', 'FEsubscriptions', 'FElibrary', 'SPunlimited', 'FEmusic_home', 'FEmusic_immersive', 'FEnovel_feature'];
+let lastStrings = [];
 
 const CASES = [
     {
@@ -170,6 +196,35 @@ const CASES = [
         run: () => runScript(['FEmusic_home', 'FEmusic_explore', 'FEmusic_library_landing', 'FEmusic_immersive', 'SPunlimited'], { music: true }),
         expect: ['FEmusic_home', 'FEmusic_explore', 'FEmusic_library_landing'],
     },
+
+    /* ---- 2026-10 新 UI: guide 里不再有 guideSectionRenderer.rendererItems，
+       换成 pivotBarRenderer.items[].pivotBarItemRenderer.pivotIdentifier ---- */
+    {
+        name: '新UI(pivot): 白名单 首页/订阅/我的 —— 三个都要活下来',
+        cfg: { version: 1, mode: 'keep', hide: [], keep: ['FEwhat_to_watch', 'FEsubscriptions', 'FElibrary'], keepUnknown: false, disableLegacy: true, debug: false, catalogExtras: {} },
+        run: () => runScript(['FEwhat_to_watch', 'FEshorts', 'FEexplore', 'FEsubscriptions', 'FElibrary'], { shape: 'pivot' }),
+        expect: ['FEwhat_to_watch', 'FEsubscriptions', 'FElibrary'],
+        expectStrings: ['title-FElibrary', 'pivot-4'],   // title / targetId 这些「未知字段」必须原样保留
+    },
+    {
+        name: '新UI(pivot): 白名单 + 未知 ID 保留（keepUnknown=true，服务端新增的 tab 不会被误杀）',
+        cfg: { version: 1, mode: 'keep', hide: [], keep: ['FEwhat_to_watch'], keepUnknown: true, disableLegacy: true, debug: false, catalogExtras: {} },
+        run: () => runScript(['FEwhat_to_watch', 'FEshorts', 'FEqux_unknown'], { shape: 'pivot' }),
+        expect: ['FEwhat_to_watch', 'FEqux_unknown'],
+    },
+    {
+        name: '新UI(pivot): 黑名单隐藏 explore/shorts',
+        cfg: { version: 1, mode: 'hide', hide: ['FEexplore', 'FEshorts'], keep: [], keepUnknown: true, disableLegacy: true, debug: false, catalogExtras: {} },
+        run: () => runScript(['FEwhat_to_watch', 'FEshorts', 'FEexplore', 'FEsubscriptions', 'FElibrary'], { shape: 'pivot' }),
+        expect: ['FEwhat_to_watch', 'FEsubscriptions', 'FElibrary'],
+    },
+    {
+        name: '新UI(pivot): icon-only 变体(318370163) 也能识别，且其余项字段完好',
+        cfg: { version: 1, mode: 'hide', hide: ['FEshorts'], keep: [], keepUnknown: true, disableLegacy: true, debug: false, catalogExtras: {} },
+        run: () => runScript(['FEwhat_to_watch', 'FEshorts', 'FElibrary'], { shape: 'pivot', iconOnly: ['FEshorts', 'FElibrary'] }),
+        expect: ['FEwhat_to_watch', 'FElibrary'],
+        expectStrings: ['title-FElibrary', 'pivot-2'],
+    },
 ];
 
 /* ---------- 跑 ---------- */
@@ -183,14 +238,21 @@ try {
         build();
         let got;
         try { got = c.run(); } catch (e) { console.log(`✖ ${c.name}\n    异常: ${e.message}`); fail++; continue; }
-        const gotS = JSON.stringify(got.slice().sort());
+        const uniq = (a) => Array.from(new Set(a));
+        const gotS = JSON.stringify(uniq(got).sort());
         const expS = JSON.stringify(c.expect.slice().sort());
-        if (gotS === expS) { console.log(`✔ ${c.name}`); pass++; }
+        // 字符串扫描会把紧随其后的长度字节也算进来，所以用「包含」而不是「相等」
+        const missing = (c.expectStrings || []).filter((s) => !lastStrings.some((x) => x.indexOf(s) >= 0));
+        if (gotS === expS && missing.length === 0) { console.log(`✔ ${c.name}`); pass++; }
         else {
             fail++;
             console.log(`✖ ${c.name}`);
             console.log(`    期望保留: ${c.expect.join(', ')}`);
-            console.log(`    实际保留: ${got.join(', ')}`);
+            console.log(`    实际保留: ${uniq(got).join(', ')}`);
+            if (missing.length) {
+                console.log(`    丢失的未知字段: ${missing.join(', ')}（说明重新编码时字段没保住）`);
+                console.log(`    输出里的字符串: ${JSON.stringify(lastStrings)}`);
+            }
         }
     }
 } finally {

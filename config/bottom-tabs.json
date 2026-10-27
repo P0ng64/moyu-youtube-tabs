@@ -7,10 +7,10 @@
     "FEsubscriptions",
     "FElibrary"
   ],
-  "keepUnknown": false,
+  "keepUnknown": true,
   "disableLegacy": true,
   "debug": false,
   "catalogExtras": {},
-  "updatedAt": "2026-10-12T06:48:31.873Z",
-  "note": "由 scripts/customize.sh 生成；改完会重新生成 dist/youtube.response.js"
+  "updatedAt": "2026-10-27T00:00:00Z",
+  "note": "keepUnknown 改为 true：新 UI 下服务端可能用目录里没有的 ID 下发某个标签（例如订阅），白名单 + 未知项移除会把它误删"
 }

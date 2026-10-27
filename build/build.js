@@ -180,6 +180,7 @@ globalThis.__YT_TAB_CATALOG__ = ${JSON.stringify(cat)};
     var C = globalThis.__YT_BOTTOM_TABS__ || {};
     var CAT = globalThis.__YT_TAB_CATALOG__ || {};
     var _logged = Object.create(null);
+    var _stats = { calls: 0, ids: 0 };
     function _nm(id) { var e = CAT[id]; return e ? e.name : ''; }
     globalThis.__ytBottomTabFilter = function (params) {
         var hide = (C.hide || []).slice(0);
@@ -192,7 +193,9 @@ globalThis.__YT_TAB_CATALOG__ = ${JSON.stringify(cat)};
         }
         var keepMode = keep.length > 0;
         return function (id) {
+            _stats.calls++;
             if (!id) return false;
+            _stats.ids++;
             var known = Object.prototype.hasOwnProperty.call(CAT, id);
             if (C.debug && !_logged[id]) {
                 _logged[id] = 1;
@@ -208,6 +211,15 @@ globalThis.__YT_TAB_CATALOG__ = ${JSON.stringify(cat)};
             return drop;
         };
     };
+    /* 老 UI: guideSectionRenderer.rendererItems[].iconRender|labelRender.browseId
+       新 UI(2026-10): pivotBarRenderer.items[].pivotBarItemRenderer.pivotIdentifier
+       两边的 tab 标识都在字段 1 上，所以同一个过滤器都能读到。
+       如果哪天一个都没读到，说明结构又变了 —— 这里必须出声，不能静默失效。 */
+    globalThis.__ytTabReport = function () {
+        if (!C.debug) return;
+        if (!_stats.calls) console.log('[YT-Tabs] ⚠ 这个 guide 响应里没有底部标签项结构 —— YouTube 可能又改了，去看 upstream');
+        else console.log('[YT-Tabs] 本次处理 ' + _stats.calls + ' 项（其中有标识的 ' + _stats.ids + ' 项）');
+    };
 })();
 
 `;
@@ -220,11 +232,13 @@ function replacement(fn) {
   const hit = '_ytHit', tabs = '_ytTabs', nd = '_ytNode', ix = '_ytI', id = '_ytId';
   return `function ${fn.name}(${fn.params}){` +
     `let ${tabs}=globalThis.__ytBottomTabFilter(${pv}),${hit}=!1;` +
-    `return ${W}(${L},"rendererItems",${nd}=>{` +
+    `${W}(${L},"rendererItems",${nd}=>{` +
     `for(let ${ix}=${nd}.rendererItems.length-1;${ix}>=0;${ix}--){` +
     `let ${id}=${nd}.rendererItems[${ix}]?.iconRender?.browseId??${nd}.rendererItems[${ix}]?.labelRender?.browseId;` +
     `${id}&&${tabs}(${id})&&(${nd}.rendererItems.splice(${ix},1),${hit}=!0)` +
-    `}}),{bodyChanged:${hit},stateChanged:!1}}`;
+    `}});` +
+    `globalThis.__ytTabReport&&globalThis.__ytTabReport();` +
+    `return{bodyChanged:${hit},stateChanged:!1}}`;
 }
 
 /* ---------- 2.5 生成 QuantumultX 重写订阅 conf ---------- *
