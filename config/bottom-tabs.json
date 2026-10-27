@@ -1,16 +1,27 @@
 {
   "version": 1,
-  "mode": "keep",
-  "hide": [],
-  "keep": [
-    "FEwhat_to_watch",
-    "FEsubscriptions",
-    "FElibrary"
+  "mode": "hide",
+  "hide": [
+    "FEshorts",
+    "FEuploads",
+    "FEexplore",
+    "FEhistory",
+    "FEplaylist_aggregation",
+    "FEmy_videos",
+    "FEtrending",
+    "FEdownloads",
+    "FEmusic_home",
+    "FEmusic_explore",
+    "FEmusic_library_landing",
+    "FEmusic_immersive",
+    "FEmusic_multi_home_and_library",
+    "SPunlimited"
   ],
+  "keep": [],
   "keepUnknown": true,
   "disableLegacy": true,
-  "debug": false,
+  "debug": true,
   "catalogExtras": {},
-  "updatedAt": "2026-10-27T00:00:00Z",
-  "note": "keepUnknown 改为 true：新 UI 下服务端可能用目录里没有的 ID 下发某个标签（例如订阅），白名单 + 未知项移除会把它误删"
+  "updatedAt": "2026-10-27T05:43:34.199Z",
+  "note": "由 scripts/customize.sh 生成；改完会重新生成 dist/youtube.response.js"
 }

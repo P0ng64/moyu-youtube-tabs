@@ -180,8 +180,28 @@ globalThis.__YT_TAB_CATALOG__ = ${JSON.stringify(cat)};
     var C = globalThis.__YT_BOTTOM_TABS__ || {};
     var CAT = globalThis.__YT_TAB_CATALOG__ || {};
     var _logged = Object.create(null);
+    var _seen = [];
     var _stats = { calls: 0, ids: 0 };
     function _nm(id) { var e = CAT[id]; return e ? e.name : ''; }
+    /* 存储/通知平台差异（QX 用 $prefs/$notify，Surge/Loon 用 $persistentStore/$notification） */
+    function _store(k, v) {
+        try {
+            if (typeof $prefs !== 'undefined' && $prefs.valueForKey) {
+                if (v === undefined) return $prefs.valueForKey(k);
+                $prefs.setValueForKey(v, k); return;
+            }
+            if (typeof $persistentStore !== 'undefined' && $persistentStore.read) {
+                if (v === undefined) return $persistentStore.read(k);
+                $persistentStore.write(v, k); return;
+            }
+        } catch (e) {}
+    }
+    function _notify(title, body) {
+        try {
+            if (typeof $notify === 'function') $notify(title, '', body);
+            else if (typeof $notification !== 'undefined' && $notification.post) $notification.post(title, '', body);
+        } catch (e) {}
+    }
     globalThis.__ytBottomTabFilter = function (params) {
         var hide = (C.hide || []).slice(0);
         var keep = C.keep || [];
@@ -196,11 +216,9 @@ globalThis.__YT_TAB_CATALOG__ = ${JSON.stringify(cat)};
             _stats.calls++;
             if (!id) return false;
             _stats.ids++;
+            if (!(id in _logged)) { _logged[id] = 1; _seen.push(id); }
             var known = Object.prototype.hasOwnProperty.call(CAT, id);
-            if (C.debug && !_logged[id]) {
-                _logged[id] = 1;
-                console.log('[YT-Tabs] 底部标签: ' + id + (known ? ' (' + _nm(id) + ')' : ' (未知, 未在目录中)'));
-            }
+            if (C.debug) console.log('[YT-Tabs] 底部标签: ' + id + (known ? ' (' + _nm(id) + ')' : ' (未知, 未在目录中)'));
             if (keepMode) {                            // 白名单模式
                 if (keep.indexOf(id) >= 0) return false;
                 if (!known) return !C.keepUnknown;     // 目录外的未知标签：按 keepUnknown 决定
@@ -217,8 +235,15 @@ globalThis.__YT_TAB_CATALOG__ = ${JSON.stringify(cat)};
        如果哪天一个都没读到，说明结构又变了 —— 这里必须出声，不能静默失效。 */
     globalThis.__ytTabReport = function () {
         if (!C.debug) return;
-        if (!_stats.calls) console.log('[YT-Tabs] ⚠ 这个 guide 响应里没有底部标签项结构 —— YouTube 可能又改了，去看 upstream');
-        else console.log('[YT-Tabs] 本次处理 ' + _stats.calls + ' 项（其中有标识的 ' + _stats.ids + ' 项）');
+        var msg = _seen.length
+            ? ('看到 ' + _seen.length + ' 项: ' + _seen.join(', '))
+            : '⚠ 一个底部标签项都没识别到（结构可能又变了）';
+        console.log('[YT-Tabs] ' + msg);
+        /* 顺手用通知告诉你，省得去翻客户端日志。10 分钟内只弹一次。 */
+        try {
+            var now = Date.now(), last = Number(_store('YT_TabsNotifyAt') || 0);
+            if (now - last > 600000) { _store('YT_TabsNotifyAt', String(now)); _notify('YouTube 底栏 ID', msg); }
+        } catch (e) {}
     };
 })();
 
